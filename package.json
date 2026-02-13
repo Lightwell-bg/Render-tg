@@ -1,0 +1,14 @@
+﻿{
+  "name": "telegram-public-channel-parser",
+  "version": "1.0.0",
+  "description": "Minimal parser API for public Telegram channels (t.me/s)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "cheerio": "^1.0.0",
+    "express": "^4.21.2"
+  }
+}
