@@ -6,7 +6,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, version: 'parser-v4-serverreadtg' });
+  res.json({ ok: true, version: 'parser-v5-serverreadtg' });
 });
 
 app.get('/posts', async (req, res) => {
@@ -44,6 +44,19 @@ app.get('/posts', async (req, res) => {
     const $ = cheerio.load(response.data);
     const posts = [];
 
+    const normalizeUrl = (raw) => {
+      const value = String(raw || '').trim();
+      if (!value) return '';
+      if (value.startsWith('//')) return `https:${value}`;
+      if (value.startsWith('/')) return `https://t.me${value}`;
+      return value;
+    };
+
+    const isDirectVideoUrl = (value) => {
+      const v = String(value || '').toLowerCase();
+      return /(\.mp4($|\?)|\/file\/|cdn\d*\.telesco\.pe\/file\/)/i.test(v);
+    };
+
     $('.tgme_widget_message_wrap').each((_, el) => {
       const msg = $(el).find('.tgme_widget_message');
       const dataPost = msg.attr('data-post') || '';
@@ -70,22 +83,18 @@ app.get('/posts', async (req, res) => {
       const photoMatch = style.match(/url\('([^']+)'\)/);
       if (photoMatch && photoMatch[1]) photoUrl = photoMatch[1];
 
-      let videoUrl = '';
+      const sourceSrc = normalizeUrl($(el).find('video source').attr('src') || '');
+      const inlineVideoSrc = normalizeUrl($(el).find('video').attr('src') || '');
+      const playerHref = normalizeUrl($(el).find('.tgme_widget_message_video_player').attr('href') || '');
+      const wrapHref = normalizeUrl($(el).find('.tgme_widget_message_video_wrap a').attr('href') || '');
+      const anyMp4Href = normalizeUrl($(el).find('a[href*=".mp4"]').first().attr('href') || '');
+      const anyFileHref = normalizeUrl($(el).find('a[href*="/file/"]').first().attr('href') || '');
 
-      const sourceSrc = $(el).find('video source').attr('src') || '';
-      const inlineVideoSrc = $(el).find('video').attr('src') || '';
+      const videoCandidates = [sourceSrc, inlineVideoSrc, playerHref, wrapHref, anyMp4Href, anyFileHref]
+        .filter(Boolean)
+        .filter((v) => normalizeUrl(v) !== normalizeUrl(postUrl));
 
-      const playerHref =
-        $(el).find('.tgme_widget_message_video_player').attr('href') ||
-        $(el).find('.tgme_widget_message_video_wrap a').attr('href') ||
-        '';
-
-      const anyMp4Href = $(el).find('a[href*=".mp4"]').first().attr('href') || '';
-
-      videoUrl = sourceSrc || inlineVideoSrc || playerHref || anyMp4Href || '';
-
-      if (videoUrl.startsWith('//')) videoUrl = `https:${videoUrl}`;
-      if (videoUrl.startsWith('/')) videoUrl = `https://t.me${videoUrl}`;
+      const videoUrl = videoCandidates.find((v) => isDirectVideoUrl(v)) || '';
 
       posts.push({
         id,
