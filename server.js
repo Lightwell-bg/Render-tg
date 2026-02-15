@@ -45,8 +45,6 @@ app.get('/posts', async (req, res) => {
     const posts = [];
 
     $('.tgme_widget_message_wrap').each((_, el) => {
-      if (posts.length >= limit) return false;
-
       const msg = $(el).find('.tgme_widget_message');
       const dataPost = msg.attr('data-post') || '';
       if (!dataPost.includes('/')) return;
@@ -85,7 +83,17 @@ app.get('/posts', async (req, res) => {
       });
     });
 
-    res.json({ channel, count: posts.length, posts });
+    // Return newest posts first (by date, then by id), then apply limit.
+    const sorted = posts.sort((a, b) => {
+      const db = Date.parse(b.date || '') || 0;
+      const da = Date.parse(a.date || '') || 0;
+      if (db !== da) return db - da;
+      return (Number(b.id) || 0) - (Number(a.id) || 0);
+    });
+
+    const latest = sorted.slice(0, limit);
+
+    res.json({ channel, count: latest.length, posts: latest });
   } catch (err) {
     res.status(500).json({
       error: 'Failed to fetch/parse channel page',
