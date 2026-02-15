@@ -6,7 +6,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, version: 'parser-v5-serverreadtg' });
+  res.json({ ok: true, version: 'parser-v6-serverreadtg' });
 });
 
 app.get('/posts', async (req, res) => {
@@ -57,6 +57,38 @@ app.get('/posts', async (req, res) => {
       return /(\.mp4($|\?)|\/file\/|cdn\d*\.telesco\.pe\/file\/)/i.test(v);
     };
 
+    const fetchVideoFromEmbed = async (channelName, postId, postUrlToSkip) => {
+      if (!channelName || !postId) return '';
+
+      try {
+        const embedUrl = `https://t.me/${encodeURIComponent(channelName)}/${encodeURIComponent(postId)}?embed=1`;
+        const embedResp = await axios.get(embedUrl, {
+          timeout: 12000,
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9,ru;q=0.8',
+          },
+        });
+
+        const $$ = cheerio.load(embedResp.data);
+        const candidates = [
+          normalizeUrl($$('meta[property="og:video"]').attr('content') || ''),
+          normalizeUrl($$('meta[name="twitter:player:stream"]').attr('content') || ''),
+          normalizeUrl($$('video source').attr('src') || ''),
+          normalizeUrl($$('video').attr('src') || ''),
+          normalizeUrl($$('a[href*=".mp4"]').first().attr('href') || ''),
+          normalizeUrl($$('a[href*="/file/"]').first().attr('href') || ''),
+        ]
+          .filter(Boolean)
+          .filter((v) => normalizeUrl(v) !== normalizeUrl(postUrlToSkip));
+
+        return candidates.find((v) => isDirectVideoUrl(v)) || '';
+      } catch (_e) {
+        return '';
+      }
+    };
+
     $('.tgme_widget_message_wrap').each((_, el) => {
       const msg = $(el).find('.tgme_widget_message');
       const dataPost = msg.attr('data-post') || '';
@@ -96,6 +128,11 @@ app.get('/posts', async (req, res) => {
 
       const videoUrl = videoCandidates.find((v) => isDirectVideoUrl(v)) || '';
 
+      const hasVideoHint =
+        $(el).find('video').length > 0 ||
+        $(el).find('.tgme_widget_message_video_wrap').length > 0 ||
+        $(el).find('.tgme_widget_message_video_player').length > 0;
+
       posts.push({
         id,
         text,
@@ -106,6 +143,7 @@ app.get('/posts', async (req, res) => {
         photo_url: photoUrl || '',
         video_url: videoUrl || '',
         post_url: postUrl,
+        has_video_hint: hasVideoHint,
       });
     });
 
@@ -115,7 +153,14 @@ app.get('/posts', async (req, res) => {
     });
 
     const latest = sorted.slice(0, limit);
-    const output = latest.map(({ dateTs: _dateTs, ...rest }) => rest);
+
+    for (const post of latest) {
+      if (!post.video_url && post.has_video_hint) {
+        post.video_url = await fetchVideoFromEmbed(channel, post.id, post.post_url);
+      }
+    }
+
+    const output = latest.map(({ dateTs: _dateTs, has_video_hint: _hint, ...rest }) => rest);
 
     res.json({ channel, count: output.length, posts: output });
   } catch (err) {
