@@ -37,8 +37,8 @@ app.get('/posts', async (req, res) => {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9,ru;q=0.8'
-      }
+        'Accept-Language': 'en-US,en;q=0.9,ru;q=0.8',
+      },
     });
 
     const $ = cheerio.load(response.data);
@@ -49,21 +49,26 @@ app.get('/posts', async (req, res) => {
       const dataPost = msg.attr('data-post') || '';
       if (!dataPost.includes('/')) return;
 
-      const id = Number(dataPost.split('/')[1]) || null;
       const postUrl = `https://t.me/${dataPost}`;
 
+      const idFromDataPost = (dataPost.match(/\/(\d+)(?:\?|$)/) || [])[1];
+      const idFromUrl = (postUrl.match(/\/(\d+)(?:\?|$)/) || [])[1];
+      const id = Number(idFromDataPost || idFromUrl || 0) || null;
+
       const text = $(el).find('.tgme_widget_message_text').text().trim();
+
       const viewsRaw = $(el).find('.tgme_widget_message_views').first().text().trim();
       const views = Number((viewsRaw || '0').replace(/[^\d]/g, '')) || 0;
 
       const datetime = $(el).find('time').attr('datetime') || '';
       const date = datetime || null;
+      const dateTs = Date.parse(datetime || '') || 0;
 
       let photoUrl = '';
       const photoWrap = $(el).find('.tgme_widget_message_photo_wrap').first();
       const style = photoWrap.attr('style') || '';
-      const m = style.match(/url\('([^']+)'\)/);
-      if (m && m[1]) photoUrl = m[1];
+      const photoMatch = style.match(/url\('([^']+)'\)/);
+      if (photoMatch && photoMatch[1]) photoUrl = photoMatch[1];
 
       let videoUrl = '';
 
@@ -87,28 +92,27 @@ app.get('/posts', async (req, res) => {
         text,
         views,
         date,
+        dateTs,
         author: channel,
         photo_url: photoUrl || '',
         video_url: videoUrl || '',
-        post_url: postUrl
+        post_url: postUrl,
       });
     });
 
-    // Return newest posts first (by date, then by id), then apply limit.
     const sorted = posts.sort((a, b) => {
-      const db = Date.parse(b.date || '') || 0;
-      const da = Date.parse(a.date || '') || 0;
-      if (db !== da) return db - da;
-      return (Number(b.id) || 0) - (Number(a.id) || 0);
+      if ((b.dateTs || 0) !== (a.dateTs || 0)) return (b.dateTs || 0) - (a.dateTs || 0);
+      return (b.id || 0) - (a.id || 0);
     });
 
     const latest = sorted.slice(0, limit);
+    const output = latest.map(({ dateTs: _dateTs, ...rest }) => rest);
 
-    res.json({ channel, count: latest.length, posts: latest });
+    res.json({ channel, count: output.length, posts: output });
   } catch (err) {
     res.status(500).json({
       error: 'Failed to fetch/parse channel page',
-      details: err.message
+      details: err.message,
     });
   }
 });
@@ -116,4 +120,3 @@ app.get('/posts', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Parser API started on http://localhost:${PORT}`);
 });
-
