@@ -6,7 +6,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, version: 'parser-v3-serverreadtg' });
+  res.json({ ok: true, version: 'parser-v4-serverreadtg' });
 });
 
 app.get('/posts', async (req, res) => {
@@ -101,8 +101,8 @@ app.get('/posts', async (req, res) => {
     });
 
     const sorted = posts.sort((a, b) => {
-      if ((b.dateTs || 0) !== (a.dateTs || 0)) return (b.dateTs || 0) - (a.dateTs || 0);
-      return (b.id || 0) - (a.id || 0);
+      if ((b.id || 0) !== (a.id || 0)) return (b.id || 0) - (a.id || 0);
+      return (b.dateTs || 0) - (a.dateTs || 0);
     });
 
     const latest = sorted.slice(0, limit);
