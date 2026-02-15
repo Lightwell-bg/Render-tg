@@ -66,10 +66,21 @@ app.get('/posts', async (req, res) => {
       if (m && m[1]) photoUrl = m[1];
 
       let videoUrl = '';
-      const videoSrc = $(el).find('video source').attr('src') || $(el).find('video').attr('src') || '';
-      if (videoSrc) {
-        videoUrl = videoSrc.startsWith('//') ? `https:${videoSrc}` : videoSrc;
-      }
+
+      const sourceSrc = $(el).find('video source').attr('src') || '';
+      const inlineVideoSrc = $(el).find('video').attr('src') || '';
+
+      const playerHref =
+        $(el).find('.tgme_widget_message_video_player').attr('href') ||
+        $(el).find('.tgme_widget_message_video_wrap a').attr('href') ||
+        '';
+
+      const anyMp4Href = $(el).find('a[href*=".mp4"]').first().attr('href') || '';
+
+      videoUrl = sourceSrc || inlineVideoSrc || playerHref || anyMp4Href || '';
+
+      if (videoUrl.startsWith('//')) videoUrl = `https:${videoUrl}`;
+      if (videoUrl.startsWith('/')) videoUrl = `https://t.me${videoUrl}`;
 
       posts.push({
         id,
@@ -105,3 +116,4 @@ app.get('/posts', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Parser API started on http://localhost:${PORT}`);
 });
+
