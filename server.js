@@ -6,7 +6,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true });
+  res.json({ ok: true, version: 'parser-v3-serverreadtg' });
 });
 
 app.get('/posts', async (req, res) => {
@@ -120,3 +120,4 @@ app.get('/posts', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Parser API started on http://localhost:${PORT}`);
 });
+
